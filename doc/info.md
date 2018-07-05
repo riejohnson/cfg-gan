@@ -29,4 +29,4 @@ The network configuration parameters for the discriminator and approximator are 
 
 In case you need a reference for developing your own implementation of xICFG, relevant source code files are at `bin/src/img/`.  Look for the method `cfg_train` in `AzpG_Cfg.cpp` there.  Other directories under `bin/src` are for general purposes and should be ignored.  
 
-Please be warned that it may be hard to read as I didn't write this for reference purposes.  
+Please be warned that it may be hard to read as I didn't write this for reference purposes.
