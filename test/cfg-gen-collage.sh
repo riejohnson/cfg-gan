@@ -14,10 +14,10 @@
 
   #---  To use a pre-trained model, uncomment "nm=brlr ..." or "nm=svhn ...". 
   #---  Otherwise, specify your model, for example:
-  #---  "nm=mnist; modfn=my-mnist.ddg; imgext=pgm; numcls=10"
+  #---  "nm=mnist; modfn=my-mnist.ddg; imgext=pgm; num_class=10"
   #---      where the model file "my-mnist.ddg" is at mod/.  
-#  nm=brlr;  modfn=${nm}-conv.ddg; imgext=ppm; numcls=2  # LSUN BR+LR
-  nm=svhn;  modfn=${nm}-conv.ddg; imgext=ppm; numcls=10
+#  nm=brlr;  modfn=${nm}-conv.ddg; imgext=ppm; num_class=2  # LSUN BR+LR
+  nm=svhn;  modfn=${nm}-conv.ddg; imgext=ppm; num_class=10
 
   #---  Uncomment one of the following 5 lines 
   #---  See Appendix B of [Johnson+Zhang,ICML18] for the meaning of 'best' and 'worst'.  
@@ -49,13 +49,19 @@
   #---  Load a saved model from a file and generate images in the xbin format. 
   opt=
   num_gen=$(( ww*hh*20 ))
-  if   [ "$type" = "each-best"    ]; then gen_ppm_opt="num_each=$(( ww*hh/numcls )) num_gen=$num_gen"
+  if   [ "$type" = "each-best"    ]; then 
+    num_each=$(( ww*hh/num_class ))
+    if [ $(( num_each*num_class )) -ne $(( ww*hh )) ]; then
+      echo $fnm: Input error. When type=$type, ww times hh must be a multiple of num_class.
+      exit 1
+    fi
+    gen_ppm_opt="num_each=$num_each num_gen=$num_gen"
   elif [ "$type" = "high-entropy" ]; then gen_ppm_opt="Entropy num_gen=$num_gen"
   elif [ "$type" = "class0-best"  ]; then gen_ppm_opt="class=0 num_gen=$num_gen"
   elif [ "$type" = "class1-best"  ]; then gen_ppm_opt="class=1 num_gen=$num_gen"
   elif [ "$type" = "random"       ]; then 
     num_gen=$(( ww*hh ))
-    if [ "$numcls" = 2 ]; then gen_ppm_opt="class=0"; fi  
+    if [ "$num_class" = 2 ]; then gen_ppm_opt="class=0"; fi  
   else
     echo Unknown type: $type
     echo Use random, class0-best, class1-best, each-best, or high-entropy. 
