@@ -1,5 +1,3 @@
-# This repository is under construction. 
-
 ## CFG for GAN in C++
 This is a C++ implementation of composite functional gradient learning of generative adversarial models, described in our ICML paper:  
 * [Composite functional gradient learning of generative adversarial models](https://arxiv.org/abs/1801.06309).  Rie Johnson and Tong Zhang.  ICML 2018.  
