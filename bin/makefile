@@ -37,7 +37,9 @@ CFLAGS1 = -Isrc/com -Isrc/data -Isrc/nnet  -D__AZ_SMAT_SINGLE__ -D__AZ_GPU__  -I
 		-gencode arch=compute_50,code=sm_50 \
 		-gencode arch=compute_52,code=sm_52 \
 		-gencode arch=compute_53,code=sm_53 \
-		-gencode arch=compute_60,code=sm_60
+		-gencode arch=compute_60,code=sm_60 \
+		-gencode arch=compute_61,code=sm_61 \
+		-gencode arch=compute_62,code=sm_62
 
 CPP_FILES1= 	\
 	src/img/main_cfg.cpp \
