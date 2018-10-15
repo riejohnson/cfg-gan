@@ -44,7 +44,7 @@ static const int evshrt = 0, evlng = 1; /* short range, long range */
 #define kw_ss_decay "ss_decay=" /* reduce step-size for D and tilde{G} by multiplying this value */
 #define kw_ss_clk "ss_clk="     /* e.g., if this is 100000, reduce step-size for D and tilde{G} */
                                 /* after every 100K seconds */
-#define kw_do_gtr "Gtr"                                      
+#define kw_do_gtr "Gtr"                                
 /*------------------------------------------------------------*/ 
 void AzpG_Cfg::resetParam_general(AzParam &azp) {
   const char *eyec = "AzpG_Cfg::resetParam_general"; 
@@ -55,7 +55,7 @@ void AzpG_Cfg::resetParam_general(AzParam &azp) {
   
   azp.vInt(o, kw_rseed, rseed); 
   azp.vInt(o, kw_minib, minib);   
-  azp.vInt(o, kw_test_minib, test_minib); 
+  azp.vInt(o, kw_test_minib, test_minib);  
   azp.vInt(o, kw_test_num, test_num);    
   azp.vStr(o, kw_save_fn, s_save_fn); 
   azp.vInt(o, kw_inc, inc); 
@@ -94,7 +94,7 @@ void AzpG_Cfg::resetParam_general(AzParam &azp) {
 }
 
 /*------------------------------------------------------------*/ 
-#define kw_poolsz       "cfg_pool_size=" /* pool size */
+#define kw_cfg_N        "cfg_N="         /* N: # of data points for updating the approximator */
 #define kw_cfg_U        "cfg_U="         /* U: discriminator update frequency */
 #define kw_cfg_T        "cfg_T="         /* T */
 #define kw_cfg_eta      "cfg_eta="       /* eta for G_t(x) = G_{t-1}(x) + eta g_t(G_{t-1}(x))*/
@@ -109,6 +109,10 @@ void AzpG_Cfg::resetParam_general(AzParam &azp) {
                                          /* multipling 0.1 when the loss is not going down */
 #define kw_cfg_diff_max "cfg_diff_max="  /* stop training when |D(real)-D(gen)| exceeds this */
 #define kw_rd_wini      "cfg_rand_wini="
+
+#define kw_do_reuse_pool "ReUsePool"     /* Reuse the input pool when updating the approximator. */
+#define kw_poolsz       "cfg_pool_size=" /* obsolete: pool size in terms of # of data points */
+
 /*------------------------------------------------------------*/ 
 void AzpG_Cfg::resetParam_cfg(AzParam &azp) {
   const char *eyec = "AzpG_Cfg::resetParam_cfg";  
@@ -116,28 +120,45 @@ void AzpG_Cfg::resetParam_cfg(AzParam &azp) {
   AzPrint o(out); 
  
   azp.vInt(o, kw_cfg_T, cfg_T);  /* T */
-  azp.vInt(o, kw_poolsz, poolsz); /* pool size */  
   azp.vInt(o, kw_cfg_U, cfg_U);  /* U */   
   azp.vFloat(o, kw_cfg_eta, cfg_eta);  /* step-size in ICFG */
    
   /*---  use default values for these, typically  ---*/
+  azp.vInt(o, kw_cfg_N, cfg_N, "cfg_n=");  /* # of data points used for approximator update */    
   azp.vInt(o, kw_approx_redmax, approx_redmax); 
   azp.vFloat(o, kw_approx_decay, approx_decay); 
   azp.vFloat(o, kw_rd_wini, rd_wini); 
   azp.vFloat(o, kw_cfg_diff_max, cfg_diff_max); 
   azp.vInt(o, kw_approx_epo, approx_epo); 
 
+  poolsz = cfg_T * cfg_U * minib; 
+  int req_poolsz = -1; azp.vInt(o, kw_poolsz, req_poolsz); 
+  if (req_poolsz > 0) {
+    poolsz = req_poolsz; 
+    azp.swOn(o, do_reuse_pool, kw_do_reuse_pool);
+  }
+  
   /*---  check values  ---*/
+  AzXi::throw_if_nonpositive(cfg_N, eyec, kw_cfg_N);  
+  AzXi::throw_if_nonpositive(cfg_U, eyec, kw_cfg_U); 
+  AzXi::throw_if_nonpositive(cfg_eta, eyec, kw_cfg_eta);    
+  AzXi::throw_if_nonpositive(cfg_T, eyec, kw_cfg_T);   
+  AzXi::throw_if_nonpositive(approx_epo, eyec, kw_approx_epo);  
+  AzX::throw_if(approx_decay<0 || approx_decay>=1, eyec, kw_approx_decay, " must be in (0,1).");    
+  AzXi::throw_if_nonpositive(poolsz, eyec, kw_poolsz);   
   if (poolsz < minib || poolsz % minib != 0) {
     AzBytArr s(kw_poolsz); s << " must be a multiple of " << kw_minib << "."; 
     AzX::throw_if(true, AzInputError, eyec, s.c_str()); 
   }
-  AzXi::throw_if_nonpositive(kw_cfg_U, eyec, kw_cfg_U); 
-  AzXi::throw_if_nonpositive(cfg_eta, eyec, kw_cfg_eta);    
-  AzXi::throw_if_nonpositive(cfg_T, eyec, kw_cfg_T);   
-  AzXi::throw_if_nonpositive(poolsz, eyec, kw_poolsz); 
-  AzXi::throw_if_nonpositive(approx_epo, eyec, kw_approx_epo);  
-  AzX::throw_if(approx_decay<0 || approx_decay>=1, eyec, kw_approx_decay, " must be in (0,1).");    
+  if (cfg_N < minib || cfg_N % minib != 0) {
+    AzBytArr s(kw_cfg_N); s << " must be a multiple of " << kw_minib << "."; 
+    AzX::throw_if(true, AzInputError, eyec, s.c_str()); 
+  }  
+  if (do_reuse_pool && cfg_N != poolsz) {
+    AzBytArr s("To use "); s << kw_do_reuse_pool << ", " << kw_cfg_N << " and "; 
+    s << kw_poolsz << " must be the same."; 
+    AzX::throw_if(true, AzInputError, eyec, s.c_str());     
+  } 
 }
 
 /*------------------------------------------------------------*/ 
@@ -191,8 +212,9 @@ void AzpG_Cfg::cfg_train(const AzOut *_eval,
   (const_cast<AzpData_ *>(r_trn))->first_batch(); 
   AzpG_Pool pltrn(this, less_out); /* for training */
   AzpG_Pool pltst(this, less_out); /* for testing */
-  pltrn.reset_all(&z_trn, ddg.g_net, poolsz, test_minib); 
-  pltst.reset_all(&z_tst, ddg.g_net, test_num, test_minib); 
+  bool do_nopl = (poolsz >= cfg_T*cfg_U*minib); 
+  pltrn.reset_all(&z_trn, ddg.g_net, poolsz, test_minib, do_nopl); 
+  pltst.reset_all(&z_tst, ddg.g_net, test_num, test_minib, false); 
   check_fake_img_range(ddg.g_net, pltst, eyec);   
 
   /*---  initialize timers, statistics, and input info  ---*/
@@ -240,11 +262,11 @@ void AzpG_Cfg::cfg_train(const AzOut *_eval,
 
       /***  update approximator tilde{G} (g_net)  ***/      
       AzClock myclk(true); 
+      if (!do_reuse_pool) pltrn.reset_all(&z_trn, ddg.g_net, cfg_N, test_minib);
       approximate(ddg, tt, pltrn, approx_epo, ss_factor); 
-      pltrn.reset_all(&z_trn, ddg.g_net, poolsz, test_minib); /* training data: refresh the input pool */
-      pltst.reset_output_only();  /* test data: keep the input and remove the generator output */
-      tt = 0;           
-      myclk.tick(st.apprx_clk, st.apprx_tim);        
+      pltrn.reset_all(&z_trn, ddg.g_net, poolsz, test_minib, do_nopl); /* training data: refresh the input pool */
+      myclk.tick(st.apprx_clk, st.apprx_tim);       
+      tt = 0;                  
     } /* approximation is needed? */
    
     if (index + cfg_U*minib > data_size) { /* we hit the end of this data batch? */
@@ -422,11 +444,12 @@ void AzpG_Cfg::cfg_test(const AzpG_stat &st,
   AzBytArr s("clk,"); s << st.clk() << "," << st.tim(); 
   if (do_verbose) s << ",approx," << st.apprx_clk << "," << st.apprx_tim; 
   s << ",t," << tt << ",d_upd," << st.d_upd << ",g_upd," << st.g_upd;  
-    
+  pltst.remove_output(); 
   eval_gen(s, ddg, tt, cevs, pltst);
   format_eval(s, ev); 
   AzPrint::writeln(eval_out, s);         
   AzTimeLog::print(s, out); 
+  pltst.remove_output(); 
 }
  
 /*------------------------------------------------------------*/ 
@@ -504,7 +527,6 @@ void AzpG_Cfg::approx(AzpReNet *g_net, AzpG_xy_ &pltrn, int x_epo, double ini_cc
       AzIntArr my_ia_dxs(ia_dxs.point()+ix, d_num); 
       AzPmatVar mv_z, /* z: random vectors */ mv_y; /* G_T(z) */
       pltrn.input_output(my_ia_dxs, mv_z, mv_y); 
-
       bool is_g_test = false;      
       AzPmatVar mv_p; 
       apply_G0(g_net, is_g_test, mv_z, mv_p); /* p <- G_0(z) */         
@@ -571,7 +593,7 @@ int AzpG_Cfg::get_size(const AzpData_tmpl_ &d_tmpl) const {
   AzX::throw_if_null(g_net, eyec, "approximator"); 
   check_rg(eyec); 
   
-  int rd_trn_num = poolsz; 
+  int rd_trn_num = cfg_N; 
   int rd_epo = approx_epo; 
   int cc = d_tmpl.xdim(), sz = get_size(d_tmpl); 
   
@@ -641,7 +663,7 @@ bool AzpG_Cfg::check_progress(int tt, const AzpG_stat &st, AzpG_Ev &ev) const {
     s << " c," << ev.get_count(AzpG_Ev_Fraw);
     AzTimeLog::print(s.c_str(), out); /* show progress */
   }
-  if (cfg_diff_max > 0 && ddiff > cfg_diff_max && st.g_upd > tt && clk > clk_min) {
+  if (cfg_diff_max > 0 && ddiff > cfg_diff_max && st.g_upd > cfg_T*10 && clk > clk_min) {
     show_eval(ev);
     AzTimeLog::print("Dreal-Dgen seems to be exploding ... exiting", out);
     do_exit = true; /* exit as it's failing */
@@ -652,7 +674,7 @@ bool AzpG_Cfg::check_progress(int tt, const AzpG_stat &st, AzpG_Ev &ev) const {
       
 /*------------------------------------------------------------*/ 
 void AzpG_Cfg::update_G(AzpG_ddg &ddg, int tt, const AzpReNet *d_net, AzParam &d_azp, 
-                        const AzpData_ &r_trn) {
+                        const AzpData_tmpl_ &r_trn) {
   copy_net(ddg.d_net(tt), d_net, d_azp, &r_trn); 
 }
 

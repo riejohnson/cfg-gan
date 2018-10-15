@@ -22,13 +22,16 @@
 #include "AzpDataRand.hpp"
 #include "AzpG_ClasEval.hpp"
 
+extern AzPdevice dev; 
+extern bool __doDebug; 
+
 class AzpG_Ev_ {
 public:   
   virtual void add(int typ, const AzPmatVar &mv) = 0; 
-  virtual void add(int typ, const AzPmat &m) = 0;  
-  virtual void add_val(int typ, double val) = 0; 
-  virtual void min_val(int typ, double val) = 0; 
-  virtual void max_val(int typ, double val) = 0; 
+  virtual void add(int typ, const AzPmat &m) = 0; 
+  virtual void add_val(int typ, double val, int count=1) = 0; 
+  virtual void min_val(int typ, double val, int count=1) = 0; 
+  virtual void max_val(int typ, double val, int count=1) = 0; 
 };
 
 /*----------------------------------------------------------------------*/
@@ -58,19 +61,19 @@ public:
     check_typ(typ, "add(m)"); 
     sum[typ] += m.sum(); count[typ] += m.colNum();     
   }
-  virtual void add_val(int typ, double val) {
+  virtual void add_val(int typ, double val, int c=1) {
     AzpG_Ev::check_typ(typ, "add_val"); 
-    sum[typ] += val; ++count[typ];     
+    sum[typ]+=val; count[typ]+=c; 
   }
-  virtual void max_val(int typ, double val) {
+  virtual void max_val(int typ, double val, int c=1) {
     AzpG_Ev::check_typ(typ, "max_val");
-    if (count[typ] <= 0) { sum[typ] = val;                count[typ] = 1; }
-    else                 { sum[typ] = MAX(sum[typ], val); ++count[typ]; }
+    if (count[typ]<=0) { sum[typ]=val;                count[typ]=c; }
+    else               { sum[typ]=MAX(sum[typ], val); count[typ]+=c; }
   }
-  virtual void min_val(int typ, double val) {
+  virtual void min_val(int typ, double val, int c=1) {
     AzpG_Ev::check_typ(typ, "min_val");
-    if (count[typ] <= 0) { sum[typ] = val;                count[typ] = 1; }
-    else                 { sum[typ] = MIN(sum[typ], val); ++count[typ]; }
+    if (count[typ]<=0) { sum[typ]=val;                count[typ]=c; }
+    else               { sum[typ]=MIN(sum[typ], val); count[typ]+=c; }
   }
   double avg(int typ) const { 
     check_typ(typ, "avg"); 
@@ -141,9 +144,9 @@ public:
   }  
   void add(int typ, const AzPmat &m) { for (int ex=0;ex<evs.size();++ex) evs(ex)->add(typ, m); }  
   void add(int typ, const AzPmatVar &mv) { for (int ex=0;ex<evs.size();++ex) evs(ex)->add(typ, mv); }
-  void add_val(int typ, double val) { for (int ex=0;ex<evs.size();++ex) evs(ex)->add_val(typ,val); }
-  void min_val(int typ, double val) { for (int ex=0;ex<evs.size();++ex) evs(ex)->min_val(typ,val); }
-  void max_val(int typ, double val) { for (int ex=0;ex<evs.size();++ex) evs(ex)->max_val(typ,val); }  
+  void add_val(int typ,double val,int c=1) { for (int ex=0;ex<evs.size();++ex) evs(ex)->add_val(typ,val,c); }
+  void min_val(int typ,double val,int c=1) { for (int ex=0;ex<evs.size();++ex) evs(ex)->min_val(typ,val,c); }
+  void max_val(int typ,double val,int c=1) { for (int ex=0;ex<evs.size();++ex) evs(ex)->max_val(typ,val,c); }  
   
 protected:
   void check_index(int index, const char *eyec) const {
@@ -324,16 +327,20 @@ public:
 class AzpG_Pool : public virtual AzpG_xy_ {
 protected: 
   AzpG_Cfg_G *G; 
-  virtual void check_G(const char *eyec) { AzX::throw_if_null(G, eyec, "G"); }
-
+  virtual void check_G(const char *eyec) const { AzX::throw_if_null(G, eyec, "G"); }
+  AzPmatVar mv_g_tmpl; 
+  
   AzIntArr ia_dseq; int pos_in_dseq;
   
   AzPmatVarData mvd_z; /* input */
   AzPmatVarData mvd_g; /* generated */
+  bool doing_pool() const { return (mvd_g.dataNum() > 0); }
   AzIntArr ia_tt; 
   AzRandGen rg; 
   AzOut out; 
 
+  bool do_chk; 
+  
   virtual void _reset_tt(int data_num) {
     ia_tt.reset(data_num, -1); 
     _reset_dseq(data_num); 
@@ -341,15 +348,18 @@ protected:
   virtual void _reset_dseq(int data_num) {
     ia_dseq.range(0, data_num); pos_in_dseq = data_num;
   }
-  virtual void _reset_reuse_input(int data_num) { 
-    const char *eyec = "AzpG_Pool::_reset_reuse_input";
-    AzX::throw_if(mvd_z.dataNum() != data_num, eyec, "#data conflict"); 
-    AzX::throw_if(mvd_g.dataNum() != data_num, eyec, "#data conflict"); 
-    _reset_tt(data_num);  
-  } 
-  
-  virtual void _reset(const AzpDataRand *f_data, AzpReNet *g_net, int data_num, int minib) {
-    AzX::throw_if_null(g_net, f_data, "AzpG_Pool::_reset");   
+  virtual void _init_g_pool(int data_num) {
+    AzX::throw_if(mv_g_tmpl.dataNum() <= 0, "AzpG_Pool::_init_g_pool", 
+                  "No template for generated data"); 
+    dev.show_mem_stat(log_out, "_init_g_pool begins: "); 
+    mvd_g.init_for_put_seq(mv_g_tmpl, data_num);  
+    dev.show_mem_stat(log_out, "_init_g_pool ends: ");     
+  }
+public:  
+  virtual void reset_all(const AzpDataRand *f_data, AzpReNet *g_net, int data_num, int minib, 
+                      bool do_nopl=false) {
+    AzX::throw_if_null(g_net, f_data, "AzpG_Pool::reset_all");   
+    AzTimeLog::print("Refreshing ... ", data_num, out); 
     mvd_z.reset(); mvd_g.reset();     
     _reset_tt(data_num);    
     for (int dx = 0; dx < data_num; dx += minib) {
@@ -357,32 +367,33 @@ protected:
       bool is_test = true;       
       AzPmatVar mv_z; f_data->gen_data(d_num, mv_z);
       if (dx == 0) {
-        check_G("AzpG_Pool::_reset"); 
-        AzPmatVar mv_g; G->apply_G0(g_net, is_test, mv_z, mv_g);   
+        if (mv_g_tmpl.dataNum() <= 0) {
+          AzPmatVar mv_z_tmpl; mv_z_tmpl.set(&mv_z, 0, 1); 
+          check_G("AzpG_Pool::_reset"); 
+          G->apply_G0(g_net, is_test, mv_z_tmpl, mv_g_tmpl);   
+        }
         mvd_z.init_for_put_seq(mv_z, data_num); 
-        mvd_g.init_for_put_seq(mv_g, data_num); 
+        if (!do_nopl) _init_g_pool(data_num);       
       }
       mvd_z.put_seq(dx, mv_z);
     }
-  }  
-public:   
-  AzpG_Pool(AzpG_Cfg_G *_G, const AzOut &_out, int rand_seed=-1) : G(NULL), pos_in_dseq(-1) { 
+  }    
+  AzpG_Pool(AzpG_Cfg_G *_G, const AzOut &_out, int rand_seed=-1) : G(NULL), pos_in_dseq(-1), do_chk(false) { 
     G = _G;
     check_G("AzpG_Pool()"); 
     out = _out; rg._srand_(rand_seed); 
   }
-  virtual void reset_all(const AzpDataRand *f_data, AzpReNet *g_net, int data_num, int minib) {
-    _reset(f_data, g_net, data_num, minib);  
-  }
-  virtual void reset_output_only() {
-    int data_num = mvd_z.dataNum(); 
-    AzX::throw_if(data_num <= 0, "AzpG_Pool::reset_output_only()", "no data.  initialize the pool first."); 
-    _reset_reuse_input(data_num);  
-  } 
-  virtual int dataNum() const { return mvd_g.dataNum(); }  
+  void reset_do_chk(bool _do_chk) { do_chk = _do_chk; }   
+  virtual void remove_output() {
+    mvd_g.reset(); 
+    _reset_tt(dataNum()); 
+  }  
+  virtual int dataNum() const { return mvd_z.dataNum(); }  
   virtual void output(const AzIntArr &ia_dxs, AzPmatVar &mv_data) const { 
+    const char *eyec = "AzpG_Pool::output"; 
+    check_pool(eyec);     
     for (int ix = 0; ix < ia_dxs.size(); ++ix) {
-      AzX::throw_if(ia_tt[ia_dxs[ix]] < 0, "AzpG_Pool::data", "requested data is uninitialized."); 
+      AzX::throw_if(ia_tt[ia_dxs[ix]] < 0, eyec, "requested data is uninitialized."); 
     }
     mvd_g.get(ia_dxs, mv_data); 
   }
@@ -396,8 +407,9 @@ public:
                   eyec, "data sequence is not ready"); 
     
     if (pos_in_dseq >= ia_dseq.size()) { /* generate a new sequence if the end of data sequence is reached */
-      AzPrint::writeln(out, eyec, " Generating a new sequence ... "); 
+      if (doing_pool()) catchup(is_g_test, tt1, tns, minib);     
       AzTools::shuffle2(ia_dseq, &rg); 
+      AzPrint::writeln(out, eyec, " Generating a new sequence ... ", ia_tt[ia_dseq[0]]); 
       pos_in_dseq = 0;       
     }
     
@@ -418,7 +430,8 @@ public:
   virtual void catchup(bool is_g_test, int tt1, AzpG_ddg &tns, int minib) {
     const char *eyec = "AzpG_Pool::catchup"; 
     bool be_silent = false; 
-    int data_num = dataNum(); 
+    int data_num = dataNum();    
+    if (!doing_pool()) _init_g_pool(data_num);
     int inc = data_num / 50, milestone = inc;     
     for (int dx = 0; dx < data_num; ++dx) {
       if (!be_silent) AzTools::check_milestone(out, milestone, dx, inc);       
@@ -443,21 +456,32 @@ protected:
               AzPmatVar &mv) {
     check_G("AzpG_Pool::refine");                
     AzX::throw_if(tt0<-1, "AzpG_Pool::refine", "tt0<-1?!");                 
+    if (do_chk) {
+      for (int ix = 0; ix < ia_dxs.size(); ++ix) {
+        AzX::throw_if(ia_tt[ia_dxs[ix]] != tt0, "AzpG_Pool::refine", "Expected tt=tt0"); 
+      }      
+    }
     AzPmatVar mv_z; mvd_z.get(ia_dxs, mv_z);
     if (tt0 == -1) {                      
       G->apply_G0(tns.g_net, is_g_test, mv_z, mv);
     }
     else {
+      check_pool("AzpG_Pool::refine"); 
       mvd_g.get(ia_dxs, mv); /* get data */
     }
     for (int tx = MAX(0, tt0); tx < tt1; ++tx) {
       G->apply_gt(mv, tns.d_net(tx), tns.eta(tx), mv_z); /* refine */
     }
-    mvd_g.put(ia_dxs, mv);  /* put the refined data back */
-    for (int ix = 0; ix < ia_dxs.size(); ++ix) {
-      ia_tt(ia_dxs[ix], tt1);  /* record that their refinement level is now tt1 */
-    }  
+    if (doing_pool()) {
+      mvd_g.put(ia_dxs, mv);  /* put the refined data back */
+      for (int ix = 0; ix < ia_dxs.size(); ++ix) {
+        ia_tt(ia_dxs[ix], tt1);  /* record that their refinement level is now tt1 */
+      }  
+    }
   }
+  virtual void check_pool(const char *eyec) const {
+    AzX::throw_if(!doing_pool(), eyec, "check_pool: No pool"); 
+  }  
 };             
 
 class AzpG_stat {
@@ -503,11 +527,13 @@ class AzpG_Cfg : public virtual AzpG_Cfg_G, public virtual AzpG_Gen {
 protected: 
   /******    cfg (xICFG)  ******/
   double cfg_eta;  
-  int approx_epo, poolsz, cfg_T, cfg_U; 
+  int cfg_T, cfg_U; 
+  int cfg_N; /* # of data points used for updating the approximator */
   double cfg_diff_max; 
-  int approx_redmax; 
+  int approx_redmax, approx_epo; 
   double approx_decay, rd_wini;  
   bool doing_randinit() const { return (rd_wini > 0); }
+  int poolsz; bool do_reuse_pool; 
   
   /******  general  ******/
   AzOut out, less_out, eval_out; 
@@ -538,9 +564,10 @@ protected:
 public:
   AzpG_Cfg() : out(log_out), 
        /***** cfg parameters *****/
-       cfg_eta(-1), cfg_U(1), cfg_T(25), poolsz(640), approx_epo(10), 
+       cfg_eta(-1), cfg_U(1), cfg_T(25), cfg_N(640), 
        /***** cfg constants (that should be fixed to these values typically) *****/
-       cfg_diff_max(40), approx_redmax(3), approx_decay(0.1), rd_wini(0.01),                         
+       cfg_diff_max(40), approx_redmax(3), approx_decay(0.1), rd_wini(0.01),
+       approx_epo(10), poolsz(-1), do_reuse_pool(false), 
        /***** more general parameters and constants *****/ 
        do_pm1(false), gen_num(-1), do_no_collage(false), 
        rseed(1), test_num(10000), inc(1000), minib(64), test_minib(-1), 
@@ -565,7 +592,7 @@ protected:
   virtual void d_config(AzpReNet *d_net, AzpG_ddg &ddg, AzParam &d_azp, 
                           int init_tt, const AzpData_tmpl_ &r_trn); 
   virtual void update_G(AzpG_ddg &ddg, int tt, const AzpReNet *d_net, AzParam &d_azp, 
-                        const AzpData_ &r_trn); 
+                        const AzpData_tmpl_ &r_trn); 
   
   virtual void inline apply_G0(AzpReNet *g_net, bool is_test, const AzPmatVar &mvi, AzPmatVar &mvo) const {
     g_net->up(is_test, mvi, mvo);  

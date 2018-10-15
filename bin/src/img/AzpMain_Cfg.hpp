@@ -46,7 +46,15 @@ protected:
       g_cs[cs_idx].reset(azp, for_test, myout); 
       opa.set(opa_idx, new AzpReNetG(&g_cs[cs_idx])); 
     }
-  } 
+  }
+ 
+  /*  To enable training of image classifiers, override these ...  */
+  virtual AzpReNet *alloc_renet_for_test(AzObjPtrArr<AzpReNet> &opa, AzParam &azp) {  
+    return alloc_renet_for_test(opa, azp, 0); 
+  }
+  virtual AzpReNet *alloc_renet(AzObjPtrArr<AzpReNet> &opa, AzParam &azp, bool for_test=false) {
+    return alloc_renet(opa, azp, 0, for_test);  
+  }  
   
 public:
   AzpMain_Cfg() {} 

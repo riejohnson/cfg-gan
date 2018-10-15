@@ -231,8 +231,11 @@ public:
   void resetParam(const AzOut &out, AzParam &p) {
     const char *eyec = "AzpMain_Cfg_eval_img_Param::resetParam"; 
     AzPrint o(out); 
-    
+    _resetParam(o, p);    
     bool do_train=false, do_test=true, is_there_y=false; 
+    #define kw_trnnm "trnname="    
+    AzBytArr s_trnnm; p.vStr(kw_trnnm, &s_trnnm); 
+    do_train = (s_trnnm.length() > 0); 
     ds.resetParam(out, p, do_train, do_test, is_there_y);    
     
     p.vInt(o, kw_seed, seed); 
@@ -240,6 +243,7 @@ public:
     p.vInt(o, kw_minib, minib);
     AzXi::throw_if_nonpositive(minib, eyec, kw_minib); 
     p.swOn(o, do_verbose, kw_do_verbose); 
+    setupLogDmp(o, p);    
   }   
 }; 
 
@@ -271,7 +275,7 @@ void AzpMain_Cfg::eval_img(AzpG_ClasEval__ &cevs, int argc, const char *argv[], 
     AzpG_ClasEval_::eval_img(log_out, p.do_verbose, cevs, p.ds.tst_data(), p.minib, &ia_dxs);
   }
   else {
-    AzpG_ClasEval_::eval_img(log_out, p.do_verbose, cevs, p.ds.tst_data(), p.minib);
+    AzpG_ClasEval_::eval_img(log_out, p.do_verbose, cevs, p.ds.tst_data(), p.minib, NULL, p.ds.trn_data()); 
   }
 }
 
@@ -286,6 +290,7 @@ void AzpMain_Cfg::eval_img(AzpG_ClasEval__ &cevs, int argc, const char *argv[], 
 #define kw_do_entropy "Entropy"
 #define kw_each_num "num_each="
 
+#define kw_do_3way "ThreeWay"
 #define kw_do_rev "Rev"
 #define kw_first "first="
 #define kw_interval "interval="
@@ -301,10 +306,11 @@ public:
   int ww, hh;  /* # of images horizaontally and vertically to make a collage */
   int gap; /* gap between images to make a collage */
   AzBytArr s_gen_fn, s_clas_fn;
-  bool do_entropy, do_rev, do_compati;
+  bool do_entropy, do_rev, do_compati, do_3way; 
   int cls_no, first, interval, each_num;
   AzpMain_Cfg_gen_ppm_Param(AzParam &azp, const AzOut &out, const AzBytArr &s_action)
     : seed(-1), gen_num(-1), minib(64), ww(-1), hh(-1), gap(-1), do_entropy(false), do_verbose(false),
+      do_3way(false), 
       do_rev(false), first(-1), interval(-1), do_compati(false), cls_no(-1), each_num(-1) {
     reset(azp, out, s_action);
   }
@@ -325,12 +331,15 @@ public:
     if (doing_collage()) {
       p.vStr(o, kw_clas_fn, s_clas_fn);
       if (s_clas_fn.length() > 0) {    
-        p.swOn(o, do_entropy, kw_do_entropy);
-        if (!do_entropy) {
-          p.vInt(o, kw_cls_no, cls_no);
-          if (cls_no < 0) p.vInt(o, kw_each_num, each_num);
+        p.swOn(o, do_3way, kw_do_3way); 
+        if (!do_3way) {
+          p.swOn(o, do_entropy, kw_do_entropy);
+          if (!do_entropy) {
+            p.vInt(o, kw_cls_no, cls_no);
+            if (cls_no < 0) p.vInt(o, kw_each_num, each_num);
+          }
+          if (cls_no >= 0 || do_entropy || each_num > 0) p.swOn(o, do_rev, kw_do_rev);
         }
-        if (cls_no >= 0 || do_entropy || each_num > 0) p.swOn(o, do_rev, kw_do_rev);
       }
       p.vInt(o, kw_hh, hh);
       p.vInt(o, kw_gap, gap);
@@ -338,12 +347,15 @@ public:
       gap = MAX(gap, 0);
       if (gen_num <= 0) gen_num = ww*hh;
       AzX::throw_if(gen_num<ww*hh, eyec, "Conflict between (w,h) and num_gen");
-      p.vInt(o, kw_first, first);
-      if (first >= 0) {
-        interval = 1; /* default */
-        p.vInt(o, kw_interval, interval);
-        int num = DIVUP(gen_num-first, interval);
-        AzX::throw_if(num<ww*hh, eyec, "Conflict between (w,h) and (num_gen,first,interval)");
+      
+      if (!do_3way) {
+        p.vInt(o, kw_first, first);
+        if (first >= 0) {
+          interval = 1; /* default */
+          p.vInt(o, kw_interval, interval);
+          int num = DIVUP(gen_num-first, interval);
+          AzX::throw_if(num<ww*hh, eyec, "Conflict between (w,h) and (num_gen,first,interval)");
+        }
       }
     }
     else {
@@ -394,14 +406,26 @@ void AzpMain_Cfg::gen_ppm(int argc, const char *argv[], const AzBytArr &s_action
       AzParam clas_azp("", true, param_dlm);
       clas_net = alloc_renet_for_test(opa_cls, clas_azp, cls_cs_idx);
       if (!p.do_verbose) clas_net->deactivate_out();
-      clas_net->read(p.s_clas_fn.c_str());
-      AzTimeLog::print("Sorting images by predicted classes ... ", log_out);
-      AzpG_Tools::order_by_cls(clas_net, p.minib, data, ia_dxs,
-                               p.do_entropy, p.cls_no, p.do_rev, p.each_num);
-      if (p.first >= 0 && p.interval > 0) {
-        AzIntArr ia(&ia_dxs); ia_dxs.reset();
-        for (int ix = p.first; ix < ia.size(); ix += p.interval) ia_dxs.put(ia[ix]);
+      clas_net->read(p.s_clas_fn.c_str());     
+      if (p.do_3way) {         
+        AzTimeLog::print("Choosing the ones with the highest probability/entropy ... ", log_out);    
+        AzIntArr ia01(&ia_dxs), ia_ent(&ia_dxs); 
+        AzpG_Tools::order_by_cls(clas_net, p.minib, data, ia01, false, 0, false, -1);   /* class0 to class1 */                 
+		AzpG_Tools::order_by_cls(clas_net, p.minib, data, ia_ent, true, -1, false, -1); /* entropy */        
+        int num0 = p.ww*p.hh/3, num1 = num0, num_ent = p.ww*p.hh - num0 - num1; 
+        ia_dxs.reset(ia01.point(), num0); /* class0 */
+        ia_dxs.concat(ia_ent.point(), num_ent); /* entropy */
+        for (int ix = 0; ix < num1; ++ix) ia_dxs.put(ia01[ia01.size()-1-ix]); /* class1 */
       }
+      else {
+        AzTimeLog::print("Sorting images by predicted classes ... ", log_out);  
+        AzpG_Tools::order_by_cls(clas_net, p.minib, data, ia_dxs,
+                                 p.do_entropy, p.cls_no, p.do_rev, p.each_num);
+        if (p.first >= 0 && p.interval > 0) {
+          AzIntArr ia(&ia_dxs); ia_dxs.reset();
+          for (int ix = p.first; ix < ia.size(); ix += p.interval) ia_dxs.put(ia[ix]);
+        }                                 
+      }   
       ia_dxs.cut(p.ww*p.hh);
     }
     AzpG_Tools::gen_collage_ppm(data, p.do_pm1, ia_dxs, p.gap, p.s_gen_fn.c_str(),

@@ -47,19 +47,22 @@ protected:
   AzObjPtrArr<AzpReNet> arr; /* own it */
   AzpReNet *clas_net;  /* just pointing */
   int myno; 
-  
   bool do_verbose; 
 
   /*---  for the score  ---*/
   AzBytArr s_snm; 
   AzPmat m_out;  
   
+  bool do_ms; 
+  AzIntArr ia_ms_class; 
+  double ms_eps; 
+  
   /*---  for class dist  ---*/
   AzBytArr s_cnm; 
   AzBytArr s_y_fn;
   AzPmat v_real_y;   
 public:  
-  AzpG_ClasEval() : clas_net(NULL), myno(-1), do_verbose(false), 
+  AzpG_ClasEval() : clas_net(NULL), myno(-1), do_verbose(false), do_ms(false), ms_eps(1e-8), 
                     s_snm("score"), s_cnm("classKL") {}
 
   virtual void reset() {
@@ -105,13 +108,14 @@ public:
   }
   virtual void eval_clas(const AzPmatVar &mv_gen, int dx_begin, int d_num); 
   virtual void show_eval(AzBytArr &s, const char *pfx=""); 
-  void resetParam(int no, const AzOut &out, AzParam &azp) {}  
+  void resetParam(int no, const AzOut &out, AzParam &azp); 
   
 protected:  
   virtual void _show_scores(AzBytArr &s, const AzBytArr &ss); 
   virtual void _init_real_y(const AzOut &out, const char *y_fn); 
   virtual double _get_kl(const AzPmat &_v0, const AzPmat &_v1) const; 
   static double _eval_score(const AzPmat &m_out, AzPmat *v_sclas=NULL);  
+  static double _eval_score_multi(const AzPmat &_m, const AzIntArr &ia_ms_mask, double ms_eps); 
   static void _smooth(AzPmat &m, double eps);    
   template <class T> static void name_value(AzBytArr &s, const AzBytArr &ss, const char *nm, T v) {
     s << "," << nm<<ss << "," << v; 

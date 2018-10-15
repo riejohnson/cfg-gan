@@ -48,6 +48,62 @@ double AzpG_ClasEval::_eval_score(const AzPmat &_m, AzPmat *_v_sclas) { /* stati
 }
 
 /*------------------------------------------------------------*/ 
+double AzpG_ClasEval::_eval_score_multi(const AzPmat &_m, const AzIntArr &ia_ms_class, double eps) { /* static */
+  AzPmat mo[2]; 
+  mo[0].set(&_m); 
+  mo[0].multiply(-1); mo[0].exp(); mo[0].add(1); mo[0].pow(-1); /* p(y=1|x)=1/(1+exp(-u)) */
+  mo[1].set(&mo[0], -1); mo[1].add(1); /* p(y=-1)=1-p(y=1|x) */
+  mo[0].truncate(eps, 1-eps); 
+  mo[1].truncate(eps, 1-eps); 
+  
+  AzPmat v_py[2]; v_py[0].avg_per_row(&mo[0]); /* p(y=1) */   
+  v_py[1].set(&v_py[0], -1); v_py[1].add(1);  /* p(y=-1) = 1-p(y=1) */
+  v_py[0].truncate(eps, 1-eps); 
+  v_py[1].truncate(eps, 1-eps); 
+  
+  AzPmat vv; 
+  for (int ix = 0; ix < 2; ++ix) {
+    v_py[ix].pow(-1); /* 1/p(y)  */
+    AzPmat m(&mo[ix]); m.multi_col(&v_py[ix]); m.log(); /* log(p(y|x_i)/p(y)) */
+    m.elm_multi(&mo[ix]); /* p(y|x_i) log(p(y|x_i)/p(y)) */
+    AzPmat v; v.avg_per_row(&m);
+    if (ix == 0) vv.set(&v); 
+    else         vv.add(&v); 
+  }
+  vv.exp(); 
+  vv.dump(log_out, "scores"); 
+  double val = 0; 
+  if (ia_ms_class.size() > 0) {
+    AzDmat m_val; vv.get(&m_val); 
+    for (int ix = 0; ix < ia_ms_class.size(); ++ix) val += m_val.get(ia_ms_class[ix], 0);  
+    val /= (double)ia_ms_class.size(); 
+  }  
+  else {
+    val = vv.sum() / (double)vv.rowNum(); 
+  }
+  return val; 
+}
+
+/*------------------------------------------------------------*/ 
+void AzpG_ClasEval::resetParam(int no, const AzOut &out, AzParam &azp) {
+  #define kw_do_ms "MultiScore"
+  #define kw_ms_mask "ms_class="
+  #define kw_ms_eps "ms_eps="  
+  AzPrint o(out); 
+  azp.swOn(o, do_ms, kw_do_ms); 
+  if (do_ms) {
+    AzBytArr s_ms_mask; 
+    azp.vStr(o, kw_ms_mask, s_ms_mask); 
+    ia_ms_class.reset(); 
+    if (s_ms_mask.length() > 0) {
+      AzTools::getInts(s_ms_mask.c_str(), ',', &ia_ms_class); 
+    }
+    azp.vFloat(o, kw_ms_eps, ms_eps); 
+  }
+  o.printEnd(); 
+}
+
+/*------------------------------------------------------------*/ 
 void AzpG_ClasEval::_smooth(AzPmat &m, double eps) { /* static */
   if (m.size() <= 0) return; 
   while(m.min() == 0) {
@@ -96,10 +152,12 @@ void AzpG_ClasEval::show_eval(AzBytArr &s, const char *pfx) {
 /*------------------------------------------------------------*/ 
 void AzpG_ClasEval::_show_scores(AzBytArr &s, const AzBytArr &ss) {
   AzPmat v_sclas; /* s for soft */
-  double score = _eval_score(m_out, &v_sclas);  
+  double score = 0; 
+  if (do_ms) score = _eval_score_multi(m_out, ia_ms_class, ms_eps); 
+  else       score = _eval_score(m_out, &v_sclas);  
   name_value(s, ss, s_snm, score); 
   
-  if (v_real_y.size() > 0) {
+  if (v_real_y.size() > 0 && v_sclas.max() > 0) {
     AzPmat vv_clas(&v_sclas); 
     double kl0 = _get_kl(v_real_y, vv_clas); 
     double kl1 = _get_kl(vv_clas, v_real_y); 
