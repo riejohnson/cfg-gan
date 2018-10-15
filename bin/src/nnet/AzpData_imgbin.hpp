@@ -158,7 +158,8 @@ public:
   }  
   
   virtual void gen_targets(const int *dxs, int d_num, AzPmat *m_out_y) const {
-    AzX::throw_if(true, "AzpData_imgbin::gen_targets(dense)(dxs,d_num..)", "target is sparse"); 
+    AzSmat ms; gen_targets(dxs, d_num, &ms); 
+    AzDmat md(&ms); m_out_y->set(&md); 
   }  
   virtual void gen_targets(const int *dxs, int d_num, AzSmat *m_out_y) const {
     ms_y.copy_to_smat(m_out_y, dxs, d_num); 

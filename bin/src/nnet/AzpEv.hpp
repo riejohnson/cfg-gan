@@ -42,6 +42,7 @@ class AzpEv {
 public:
   virtual void eval_pred(const char *y_fn, const char *p_fn, const char *typ, 
                         const char *th_fn, const AzOut &out) const; 
+  static int eval_classif_multibin(const AzPmat *_m_p, const AzPmat *_m_y, double border); 
   static int eval_classif(const AzPmat *m_p, const AzPmat *m_y); /* 0,0,1,0,...0 */ 
   static int eval_classif(const AzPmat *m_p, const AzSmat *m_y); /* 0,0,1,0,...0 */   
   static int eval_classif_largeCat(const AzPmat *m_p, const AzPmat *m_y); /* 0,0,1,0,...0 */   

@@ -156,14 +156,15 @@ public:
 class AzpData_tmpl1D : public virtual AzpData_tmpl_ {
 protected: 
   AzDicc dummy_dic; 
-  int _xdim;
+  int _xdim, _ydim; 
 public:
-  AzpData_tmpl1D(int ixdim) : _xdim(1) { _xdim = ixdim; }   
+  AzpData_tmpl1D(int ixdim) : _xdim(1), _ydim(1) { _xdim = ixdim; }   
   virtual void reset_xdim(int ixdim) { _xdim = ixdim; }  
+  virtual void reset_ydim(int iydim) { _ydim = iydim; }
   virtual int xdim(int dsno=0) const { return _xdim; }  
   virtual bool is_vg_x() const { return true; }
   virtual bool is_sparse_x() const { return false; }  
-  virtual int ydim() const { return 1; }
+  virtual int ydim() const { return _ydim; }
   virtual int datasetNum() const { return 1; }
   virtual int dimensionality() const { return 1; }
   virtual int size(int index) const { return -1; }
@@ -173,17 +174,18 @@ public:
 class AzpData_tmpl1D2 : public virtual AzpData_tmpl_ {
 protected: 
   AzDicc dummy_dic; 
-  int _xdim0, _xdim1; 
+  int _xdim0, _xdim1, _ydim; 
 public:
-  AzpData_tmpl1D2(int ixdim0, int ixdim1) { reset_xdim(ixdim0, ixdim1); }
+  AzpData_tmpl1D2(int ixdim0, int ixdim1) : _ydim(1) { reset_xdim(ixdim0, ixdim1); }
   void reset_xdim(int ixdim0, int ixdim1) { _xdim0=ixdim0; _xdim1=ixdim1; }
   virtual int xdim(int dsno=0) const { 
     if (dsno == 0) return _xdim0; 
     else           return _xdim1; 
   }  
+  virtual void reset_ydim(int iydim) { _ydim = iydim; }  
   virtual bool is_vg_x() const { return true; }
   virtual bool is_sparse_x() const { return false; }  
-  virtual int ydim() const { return 1; }
+  virtual int ydim() const { return _ydim; }
   virtual int datasetNum() const { return 2; }
   virtual int dimensionality() const { return 1; }
   virtual int size(int index) const { return -1; }

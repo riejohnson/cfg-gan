@@ -262,12 +262,12 @@ double AzpLossDflt::_test_eval(
       AzPrint::writeln(out, s); 
       if (s_pf != NULL) s_pf->reset("1-F"); 
       return 1-prf.fval; 
-    }
+    }   
     else {
       if (s_pf != NULL) s_pf->reset(AzpEvalNoSupport); 
       return -1;       
     }
-  }
+  }  
   /*---  classification  ---*/
   else {
     int correct = AzpEv::eval_classif(m_p, m_y); 
@@ -304,7 +304,7 @@ double AzpLossDflt::_test_eval(int data_size,
     if (do_force_eval) {
       AzPmat m_y(ms_y);
       return _test_eval(data_size, m_p, &m_y, m_dw, out_loss, out, s_pf);
-    }
+    }    
     if (s_pf != NULL) s_pf->reset(AzpEvalNoSupport);  
     if (out_loss != NULL) *out_loss = _get_loss(m_p, &m_y, NULL) / (double)data_size; 
     return -1;      
@@ -351,8 +351,15 @@ void AzpLossDflt::_test_eval2(const AzPmat *m_p, const M *m_y,
     perf_val += loss; 
   }
   else if (is_multicat) { /* multi-label classification */
+    AzPmat mp_y(m_y); 
+    double border = (loss_type == AzpLossDflt_BinLogi) ? 0 : 0.5; 
+    int correct = AzpEv::eval_classif_multibin(m_p, &mp_y, border); 
+    if (s_pf != NULL) s_pf->reset("acc");
+    perf_val += (double)correct / (double)m_p->rowNum();    
+#if 0     
     if (s_pf != NULL) s_pf->reset(AzpEvalNoSupport);  
     perf_val = -1; 
+#endif     
   }
   else { /* single-label classification */
     int correct = (do_largecat_eval) ? AzpEv::eval_classif_largeCat(m_p, m_y) : AzpEv::eval_classif(m_p, m_y); 

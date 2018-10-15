@@ -386,6 +386,25 @@ int AzpEv::eval_classif(const AzPmat *m_p, const AzPmat *m_y) /* ...,0,1,0,... *
 
 /*------------------------------------------------------------*/
 /* static */
+int AzpEv::eval_classif_multibin(const AzPmat *_m_p, const AzPmat *_m_y, double border) {
+  AzDmat m_p, m_y; 
+  _m_p->get(&m_p); 
+  _m_y->get(&m_y); 
+  int correct = 0; 
+  for (int dx = 0; dx < m_p.colNum(); ++dx) {
+    for (int row = 0; row < m_p.rowNum(); ++row) {
+      double p_val = m_p.get(row, dx), y_val = m_y.get(row, dx); 
+      if (p_val >= border && y_val >= border ||
+          p_val < border  && y_val <  border) {
+        ++correct;              
+      }
+    }      
+  }
+  return correct; 
+} 
+
+/*------------------------------------------------------------*/
+/* static */
 int AzpEv::eval_classif(const AzPmat *m_p, 
                            const AzSmat *m_y) /* 0,0,1,0,...0 */ 
 {                

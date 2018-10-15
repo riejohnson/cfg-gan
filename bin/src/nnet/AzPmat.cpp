@@ -313,22 +313,26 @@ void AzPmat::set(int col, int c_num, const AzFloat *p_host, int data_len)
 }
 
 /*------------------------------------------------*/
-void AzPmat::cbind(const AzDataArr<AzPmat> *am) 
-{
-  if (am->size() <= 0) {
-    reform(0,0); 
+void AzPmatVar::cbind(const AzDataArr<AzPmatVar> &amv) {
+  if (amv.size() <= 0) {
+    reset(); 
     return; 
   }
-  int rnum = am->point(0)->rowNum(); 
-  int cnum = 0; 
-  for (int ix = 0; ix < am->size(); ++ix) cnum += am->point(ix)->colNum(); 
-  reform(rnum, cnum); 
+  int rnum = amv[0]->rowNum(); 
+  AzIntArr ia_colind; 
   int col = 0; 
-  for (int ix = 0; ix < am->size(); ++ix) {
-    const AzPmat *m = am->point(ix);   
-    AzX::throw_if((m->rowNum() != rnum), "AzPmat::cbind(am)", "Invalid #row"); 
-    set(col, m->colNum(), m);
-    col += m->colNum(); 
+  for (int ix = 0; ix < amv.size(); ++ix) {
+    const AzPmatVar *mv = amv[ix]; 
+    AzX::throw_if(mv->rowNum() != rnum, "AzPmatVar::cbind(amv)", "Invalid #row");       
+    ia_colind.concat(mv->h_index(), col); 
+    col += mv->colNum(); 
+  }
+  reform(rnum, &ia_colind); 
+  col = 0; 
+  for (int ix = 0; ix < amv.size(); ++ix) {
+    const AzPmatVar *mv = amv[ix]; 
+    data_u()->set(col, mv->colNum(), mv->data());
+    col += mv->colNum(); 
   }  
 }
 

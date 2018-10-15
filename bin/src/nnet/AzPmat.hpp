@@ -1017,7 +1017,9 @@ public:
     data_num += mv->data_num; 
     AzX::throw_if(ia_dcolind.size() != data_num*2, "AzPmatVar::cbind", "#data conflict"); 
     check_colNum("AzPmatVar::cbind"); 
-  }   
+  }
+  void cbind(const AzDataArr<AzPmatVar> &amv); 
+  
   void add(const AzPmatVar *mv) {
     const char *eyec = "AzPmatVar::add"; 
     if (mv == NULL) return; 
@@ -1067,6 +1069,23 @@ public:
     m.set(&m0); 
   }
   
+  /*---  used in AzPmatVarData  ---*/
+  void put(const AzIntArr &ia_dxs, const AzPmatVar &mvi, bool do_chk=false) {
+    const char *eyec = "AzPmatVar::put"; 
+    AzIntArr ia_dcol; 
+    int scol = 0; 
+    for (int ix = 0; ix < ia_dxs.size(); ++ix) {
+      int dx = ia_dxs[ix]; 
+      AzIntArr ia; ia.range(get_begin(dx), get_end(dx)); 
+      ia_dcol.concat(&ia); 
+      if (do_chk) {
+        AzX::throw_if(mvi.get_begin(ix) != scol || mvi.size(ix) != ia.size(), eyec, "shape mismatch"); 
+        scol += ia.size(); 
+      }
+    }
+    data_u()->copy_dcol(mvi.data(), ia_dcol); 
+  }  
+  
 protected: 
   void _set(int cc, const AzPmat *_m, const AzPintArr *_pia_dcolind, const AzIntArr *_ia_dcolind, 
             bool do_noinit=false); 
@@ -1114,17 +1133,9 @@ public:
   }  
   void put(const AzIntArr &ia_dxs, const AzPmatVar &mvi) { 
     check_input(mvi, "AzPmatVarData::put"); 
-    put(_mv, ia_dxs, mvi); 
+    _mv.put(ia_dxs, mvi); 
   }    
-  static void put(AzPmatVar &_mv, const AzIntArr &ia_dxs, const AzPmatVar &mvi) {
-    AzIntArr ia_dcol; 
-    for (int ix = 0; ix < ia_dxs.size(); ++ix) {
-      int dx = ia_dxs[ix]; 
-      AzIntArr ia; ia.range(_mv.get_begin(dx), _mv.get_end(dx)); 
-      ia_dcol.concat(&ia); 
-    }
-    _mv.data_u()->copy_dcol(mvi.data(), ia_dcol); 
-  } 
+
 protected:
   void check_input(const AzPmatVar &mvi, const char *eyec) const { 
     AzX::throw_if(mvi.rowNum() != _mv.rowNum(), eyec, "Unexpected #row");     

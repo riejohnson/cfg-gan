@@ -103,11 +103,12 @@ protected:
   
   double ent_overflow; 
   double entnum, entnum_max; 
+  double req_count; 
   int max_no; 
   
 public:   
   AzPmem() : mem(NULL), memsz(0), curr_extra(0), extra_count(0), curr_mem(0), max_mem(0), ent_overflow(0),
-             entnum(0), entnum_max(0), max_no(-1) {}
+             entnum(0), entnum_max(0), max_no(-1), req_count(0) {}
   ~AzPmem() { term(); }
 
   void init(double gb) { /* giga byte */
@@ -140,20 +141,19 @@ public:
     ent(0)->set(mem, memsz, false);  /* initially, we only have one big area */
     curr_extra = extra_count = 0; max_no = 0; 
     entnum = entnum_max = 1; 
-    ent_overflow = 0; 
+    ent_overflow = req_count = 0; 
   }
   void term() {  
     _AzPmem::_free(mem, "AzPmem::term", "mem"); 
     mem = NULL; 
     memsz = 0; 
     ent.reset(); 
-    if (entnum_max > 0) {
-      AzBytArr s("AzPmem stat: #concurrent="); s << entnum_max << " max-entry#=" << max_no; 
-      if (ent_overflow > 0) s << " table-expansion=" << ent_overflow;
-      if (extra_count > 0)  s << " for-memory=" << extra_count-ent_overflow; 
-//      AzPrint::writeln(log_out, s);  /* removed: 6/28/2018 */
+    if (__doDebug && entnum_max > 0) {
+      AzBytArr s("AzPmem stat: "); 
+      show_stat(s); 
+      AzPrint::writeln(log_out, s); 
     }
-    entnum = entnum_max = ent_overflow = extra_count = 0; 
+    entnum = entnum_max = ent_overflow = extra_count = req_count = 0; 
   }
 
   /*--------------------------------------------------------------------------------*/
@@ -162,6 +162,7 @@ public:
     size_t sz = align(_sz);  
     curr_mem += sz; max_mem = MAX(max_mem, curr_mem); 
     ++entnum; entnum_max = MAX(entnum, entnum_max); 
+    ++req_count; 
     
     no = first(); 
     for ( ; no >= 0; ) {
@@ -220,6 +221,12 @@ public:
       ent[no]->print(no, s); 
       no = ent[no]->next; 
     }
+  }
+  void show_stat(AzBytArr &s) const {
+    s<<" req_count="<<req_count; 
+    s<<" max_mem="<< max_mem<<" extra_count="<<extra_count; 
+    s<<" ent_overflow="<<ent_overflow; 
+    s<<" entnum_max="<<entnum_max<<" max_no="<<max_no;     
   }
 
 protected:   

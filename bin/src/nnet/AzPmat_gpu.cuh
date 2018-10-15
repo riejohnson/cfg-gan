@@ -162,6 +162,14 @@ public:
     pmem.term(); 
     free_handles("closeDevice()"); 
   }
+  void show_mem_stat(const AzOut &out, const char *header="", bool do_force=false) const {
+    AzBytArr s(header); 
+    pmem.show_stat(s); 
+    if (__doDebug || do_force) AzPrint::writeln(out, s); 
+  }
+  void show_mem_stat(AzBytArr &s) const {
+    pmem.show_stat(s); 
+  }  
   static int getDevice() {
     int dev; 
     cudaError_t ret = cudaGetDevice(&dev); 
