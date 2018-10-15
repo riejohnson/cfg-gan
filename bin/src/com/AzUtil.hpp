@@ -41,7 +41,6 @@ typedef long long int AZint8;
 #ifdef __AZ_MSDN__
 #define fseek  _fseeki64
 #define ftell  _ftelli64
-#define fscanf fscanf_s
 #endif
 
 #include "AzException.hpp"
