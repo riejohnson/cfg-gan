@@ -25,16 +25,16 @@ Here is slightly more [technical details](doc/info.md).
 
 **_FAQ_**  
 Q. Do you have a tensorflow or pyTorch version of this code?  
-A. No.  Please let me know if you've made one.  
+A. Yes.  There is a [pyTorch version](http://github.com/riejohnson/cfg-gan-pt).  
 
 Q. Is there a python wrapper for this code?  
 A. No.  Instead, you have shell scripts (`test/*.sh`).  The network architecture and training/generation parameters can be changed by changing the shell scripts.
   
 Q. Why C++?  
-A. For historical reasons.  But don't worry, you don't have to read it if you just want to use this code. 
+A. For historical reasons.  But don't worry, you don't have to read it if you just want to use this code.  Also, there is a [pyTorch version](http://github.com/riejohnson/cfg-gan-pt).  
 
 Q. I just want to see your xICFG implementation as a reference for developing my own code for doing xICFG.  Which source file should I look at?    
-A. Please see "Source code" in [doc/info.md](doc/info.md).  
+A. Please see "Source code" in [doc/info.md](doc/info.md) or see `cfggan.py` of the [pyTorch version](http://github.com/riejohnson/cfg-gan-pt).  
 
  
 **_Data Source_**: The data files included here or downloaded by the scripts here 
